@@ -1,0 +1,97 @@
+---
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "../R_Output") })
+output:
+  pdf_document:
+    fig_caption: yes
+    latex_engine: xelatex
+classoption: landscape
+
+header-includes:
+- \usepackage{array}
+- \usepackage{longtable}
+- \usepackage{booktabs}
+- \usepackage{fancyhdr}
+- \usepackage{lastpage}
+- \pagestyle{fancy}
+- \usepackage{geometry}
+- \geometry{top = 1in, right=0.5in, left=0.5in, bottom = 1in}
+
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+
+```
+
+\renewcommand{\arraystretch}{1.15}
+
+```{r, fig.width = 11, fig.height = 8, results = "asis"}
+
+latex_setup()
+
+
+ae_dt <- data.table(read_sas("../adam/adae.sas7bdat"))
+ae_dt <- ae_dt[SAFFL=="Y" & TRTEMFL == "Y" & ANL01FL == "Y"]
+
+aevar <- c("SUBJID", "TRTA", "AEDECOD", "AEBODSYS", 
+           "AESEV", "AESEVN", "AESER", "AESTDY", "AEENDY", "AEDUR")
+
+
+setorder(ae_dt, SUBJID, TRTA, AEBODSYS, AEDECOD, AESEVN)
+ae_dt <- ae_dt[, .SD[.N], .(SUBJID, TRTA, AEBODSYS, AEDECOD)]
+
+ae_dt <- unique(ae_dt[, aevar, with=F])
+syslvl <- setorder(ae_dt[!is.na(AEBODSYS), .N, AEBODSYS], -N)$AEBODSYS
+ae_dt[, AEBODSYS := factor(AEBODSYS, levels = syslvl)]
+ptlvl <- setorder(ae_dt[!is.na(AEDECOD), .N, .(AEBODSYS, AEDECOD)], AEBODSYS, -N, AEDECOD)$AEDECOD
+
+sl_dt <- data.table(read_sas("../adam/adsl.sas7bdat"))
+
+slvar <- c("SUBJID", "ARM", "SAFFL", "MITTFL", "PPAFL")
+sl_dt <- unique(sl_dt[SAFFL == "Y", slvar, with=F])
+
+ae_dt <- merge(sl_dt, ae_dt, all.x = TRUE)
+
+pt_freq_dt <- ae_dt[, .(n = length(unique(SUBJID))), .(TRTA, AEBODSYS,  AEDECOD)]
+bodsys_freq_dt <- ae_dt[, .(n = length(unique(SUBJID))), .(TRTA, AEBODSYS)]
+bodsys_freq_dt[, AEDECOD := " All"]
+ae_freq_dt <- rbind(bodsys_freq_dt, pt_freq_dt)
+
+ae_freq_dt[, AEDECOD := factor(AEDECOD, levels = c(" All", ptlvl))]
+
+trt_freq_dt <- sl_dt[, .(N = .N), .(ARM)]
+setnames(trt_freq_dt, "ARM", "TRTA")
+
+ae_freq_dt <- merge(ae_freq_dt, trt_freq_dt, by="TRTA")[, 
+                            `:=`(pct = round(n/N*100,1))]
+ae_freq_dt[, `:=`(TRTLBL = paste0(" (N = ", N,")"),
+                  RES = paste0(n, " (", sprintf("%5.1f", pct), ")"))]
+
+ppct <- function(x){
+  paste0(" (", sprintf("%.1f", x), ")")
+} 
+
+
+ae_freq_dt[, mx:=max(pct), .(AEBODSYS, AEDECOD)]
+
+ae_freq_dt1 <- ae_freq_dt[AEDECOD == " All"]
+setorder(ae_freq_dt1, -TRTA, -pct)
+ae_freq_dt1[, AEBODSYS := factor(AEBODSYS, unique(AEBODSYS))]
+
+
+ggplot(ae_freq_dt1, aes(y = AEBODSYS, x = pct, fill=TRTA, group=TRTA)) + 
+  geom_bar(stat = "identity") + 
+  facet_wrap(~TRTA, ncol=3)  + 
+  scale_color_discrete(guide = FALSE) +
+  scale_y_discrete("", limits = rev(levels(ae_freq_dt1$AEBODSYS))) + 
+  scale_x_continuous("Incidence Rate (%)") + 
+  theme_bw() +
+  theme(legend.position = "none") + 
+  ggtitle("Barchart of Incidence Rate by SOC - Part A")
+
+
+
+```
+

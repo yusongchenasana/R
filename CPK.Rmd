@@ -1,0 +1,98 @@
+---
+output:
+   pdf_document:
+     latex_engine: xelatex
+classoption: landscape
+
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "../R_Output")})
+
+header-includes:
+- \usepackage{array}
+- \usepackage{fancyhdr}
+- \usepackage{lastpage}
+- \usepackage{caption}
+- \pagestyle{fancy}
+- \usepackage{geometry}
+- \geometry{top = 1in, left = 1in, right = 1in, bottom = 1in}
+- \usepackage{longtable}
+- \usepackage{pgfplotstable}
+- \usepackage{booktabs}
+- \usepackage{multicol}
+- \usepackage{multirow}
+- \usepackage{siunitx}
+- \usepackage{makecell}
+- \setlength{\headheight}{32pt}
+- \sisetup{ 
+    round-mode = places,  round-precision = 2
+   }
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F, warning = F, message = F, results = "asis")
+```
+
+```{r, fig.height=8, fig.width=11}
+
+latex_setup()
+
+vars <- c("SUBJID", "TRTP", "PARAMCD","PARAM", "AVAL", "AVISIT",  "BASE", "CHG")
+adqs <- data.table(read_sas("../adam/adqs.sas7bdat"))
+ads  <- subset(adqs, PARAMCD %in% c("MTLSHTOT", "PGAHAND") & MITTFL == "Y" &
+               AVISIT %in% c("Baseline", paste0("Week ", c(4, 8, 12, 16))), select=vars)
+
+lb   <- data.table(read_sas("../adam/adlb.sas7bdat"))
+
+vars <- c("SUBJID", "TRTP", "AVAL", "AVISIT",  "BASE", "CHG")
+adslb <- subset(lb, PARAMCD == "CK" &
+                    AVISIT %in% c("Baseline", paste0("Week ", c(4, 8, 12, 16))), select=vars)
+vals <- c("BASE", "AVAL", "CHG")
+setnames(adslb, vals, paste0("CK.", vals))
+
+ads <- merge(ads, adslb)
+bl <- subset(ads, AVISIT == "Baseline")
+
+ads[, AVISIT:=factor(AVISIT, levels=c("Baseline", paste0("Week ", c(4, 8, 12, 16))))]
+
+ads <- ads[!is.na(AVAL) & !is.na(CK.AVAL) &!is.na(AVISIT)]
+ads[, corr:=cor(CK.AVAL, AVAL), .(AVISIT, PARAM)]
+
+ggplot(ads, aes(y=AVAL, x = CK.AVAL, color = TRTP)) + 
+  #geom_text(aes(x = 10, y = 3000, label = paste0("r = ", round(corr,2)))) + 
+  geom_point() + facet_wrap(~ TRTP + AVISIT, scales="free", nrow = 3) +
+  scale_y_continuous("mTLSS") +
+  scale_x_continuous("CK") + 
+  theme_bw() + 
+  theme(legend.title = element_blank(), legend.position = "bottom") +
+  ggtitle("Scatter Plot of mTLSS vs. CK") 
+
+ggplot(ads, aes(y=AVAL, x = CK.AVAL, color = TRTP)) + 
+  #geom_text(aes(x = 10, y = 3000, label = paste0("r = ", round(corr,2)))) + 
+  geom_point() + facet_wrap(~ TRTP + AVISIT, nrow = 3) +
+  scale_y_continuous("mTLSS") +
+  scale_x_continuous("CK", limits=c(0, 500)) + 
+  theme_bw() + 
+  theme(legend.title = element_blank(), legend.position = "bottom") +
+  ggtitle("Scatter Plot of mTLSS vs. CK: WITHOUT OUTLIERS ") 
+
+ggplot(ads[AVISIT != "Baseline"], aes(y=CHG, x = CK.CHG, color = TRTP)) + 
+  #geom_text(aes(x = 10, y = 3000, label = paste0("r = ", round(corr,2)))) + 
+  geom_point() + facet_wrap(~ TRTP + AVISIT, scales="free", nrow = 3) +
+  scale_y_continuous("mTLSS") +
+  scale_x_continuous("CK") + 
+  theme_bw() + 
+  theme(legend.title = element_blank(), legend.position = "bottom") +
+  ggtitle("Scatter Plot of Changes from Baseline in mTLSS and CK") 
+
+
+ggplot(ads[AVISIT != "Baseline"], aes(y=CHG, x = CK.CHG, color = TRTP)) + 
+  #geom_text(aes(x = 10, y = 3000, label = paste0("r = ", round(corr,2)))) + 
+  geom_point() + facet_wrap(~ TRTP + AVISIT, nrow = 3) +
+  scale_y_continuous("mTLSS") +
+  scale_x_continuous("CK", limits=c(-200, 400)) + 
+  theme_bw() + 
+  theme(legend.title = element_blank(), legend.position = "bottom") +
+  ggtitle("Scatter Plot of Changes from Baseline in mTLSS and CK: WITHOUT OUTLIERS ") 
+
+
+```

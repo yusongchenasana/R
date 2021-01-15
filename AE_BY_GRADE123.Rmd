@@ -1,0 +1,191 @@
+---
+title: '  '
+output:
+  pdf_document:
+    fig_caption: yes
+    latex_engine: xelatex
+classoption: landscape
+
+header-includes:
+- \usepackage{longtable}
+- \usepackage{booktabs}
+- \usepackage{fancyhdr}
+- \usepackage{lastpage}
+- \pagestyle{fancy}
+- \usepackage{geometry}
+- \geometry{top = 1in, right=0.5in, left=0.5in, bottom = 1in}
+
+---
+
+<!-- Fontsize  -->
+<!-- Fontsize  -->
+
+<!-- \tiny -->
+\scriptsize
+<!-- \footnotesize -->
+<!-- \small -->
+<!-- \normalsize -->
+<!-- \large -->
+<!-- \Large -->
+<!-- \LARGE -->
+<!-- \huge -->
+<!-- \Huge  -->
+
+    
+<!--- Define Headers and Footers --->
+\fancypagestyle{plain}{%
+  \renewcommand{\headrulewidth}{0pt}%
+  \fancyhf{}%
+  \fancyfoot[C]{\footnotesize Page \thepage\, of\, \pageref*{LastPage}}
+  \setlength\footskip{0pt}
+}
+
+\lhead{\footnotesize Asana BioSciences, LLC\newline ASN007-101}
+\rhead{\footnotesize Page \thepage\, of\, \pageref*{LastPage}}
+\lfoot{Draft}
+\cfoot{}
+\rfoot{\footnotesize Date: \today}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+
+```
+
+```{r}
+library(data.table)
+library(XLConnect)
+library(ggplot2)
+library(haven)
+library(kableExtra)
+library(magrittr)
+library(tables)
+
+
+load("AE_SUM.RData")
+
+ae_daily_freq_dt1 <- ae_daily_freq_dt[as.numeric(EXDOSE) <= 3]
+ae_daily_freq_dt2 <- ae_daily_freq_dt[as.numeric(EXDOSE) > 3]
+
+ppct <- function(x){
+  paste0("(", sprintf("%.1f", x), ")")
+} 
+
+ae_table <- function(rel = "All", dose_freq = "ASN007 Once Weekly", 
+                     data = ae_weekly_freq_de,
+                     ae_type = "Emergent") {  
+  temp <- data[REL == rel & GRADE != "All" & trimws(PREFERRED.TERM) != ""]
+  ttl <- paste0("Number and Percent of Patients with Treatment ", 
+              ae_type, " Adverse Events: ", dose_freq, "\\\\ (by Grade per Dose Level)")
+ 
+  tabular(Multicolumn(SYSTEM.ORGAN.CLASS, "SOC\\\\", width = 11, texify = T)*
+          Factor(PREFERRED.TERM, "Preferred Term") ~
+           Factor(EXDOSE, dose_freq, levelnames = levels(EXDOSE), texify = T)* 
+             Factor(GRADE, "Grade")*
+              Paste(Heading("n")*n*Heading()*sum, ppct*Heading("(\\%)")*pct, justify="r")*
+                 DropEmpty(), data=temp) %>%
+  toKable(booktabs=T,
+      options=list(tabular="longtable",
+        toprule=paste0("\\caption{", ttl, "}\\\\\\toprule"),
+          midrule="\\midrule\\\\[-1\\normalbaselineskip]\\endhead\\hline\\endfoot"))
+}
+
+ae_table1 <- function(dose_freq = "ASN007 Once Weekly",
+                      data = ae_weekly_freq_dt) {
+  temp <- data[trimws(PREFERRED.TERM) != ""]
+  ttl <- paste0("Number and Percent of Patients with Treatment Emergent/Related Adverse Events: ", dose_freq)
+
+  tabular(Multicolumn(SYSTEM.ORGAN.CLASS, "SOC\\\\", width=6)*
+          Heading("Preferred Term")*Factor(PREFERRED.TERM) ~
+           Heading()*Factor(EXDOSE)* 
+            Heading()*Factor(REL)*
+              GRADE*Paste(Heading("n")*n*Heading()*sum, 
+                                           ppct*Heading("(\\%)")*pct, justify="r")*
+                 DropEmpty(), data=temp) %>%
+  toKable(booktabs=T,
+      options=list(tabular="longtable",
+        toprule=paste0("\\caption{", ttl, "}\\\\\\toprule"),
+          midrule="\\midrule\\\\[-1\\normalbaselineskip]\\endhead\\hline\\endfoot")) 
+  }
+
+
+ae_weekly_freq_dt1 <- ae_weekly_freq_dt[as.numeric(EXDOSE) <= 3]
+ae_weekly_freq_dt2 <- ae_weekly_freq_dt[as.numeric(EXDOSE) > 3]
+
+```
+
+```{r}
+library(compiler)
+ae_table <- cmpfun(ae_table)
+ae_table1 <- cmpfun(ae_table1)
+
+ae_table(rel = "All", dose_freq = "ASN007 Once Daily",
+                     data = ae_daily_freq_dt1,
+                     ae_type = "Emergent")
+
+```
+
+\newpage
+
+```{r}
+
+ae_table(rel = "All", dose_freq = "ASN007 Once Daily",
+                     data = ae_daily_freq_dt2,
+                     ae_type = "Emergent")
+
+```
+\newpage
+
+```{r}
+ae_table(rel = "Related", dose_freq = "ASN007 Once Daily",
+                     data = ae_daily_freq_dt1,
+                     ae_type = "- Related")
+
+```
+\newpage
+
+```{r}
+ae_table(rel = "Related", dose_freq = "ASN007 Once Daily",
+                     data = ae_daily_freq_dt2,
+                     ae_type = "- Related")
+
+
+```
+\newpage
+```{r}
+ae_table(rel = "All", dose_freq = "ASN007 Once Weekly",
+                     data = ae_weekly_freq_dt1,
+                     ae_type = "Emergent")
+
+```
+\newpage
+
+```{r}
+ae_table(rel = "All", dose_freq = "ASN007 Once Weekly",
+                     data = ae_weekly_freq_dt2,
+                     ae_type = "Emergent")
+
+```
+\newpage
+```{r}
+ae_table(rel = "Related", dose_freq = "ASN007 Once Weekly",
+                     data = ae_weekly_freq_dt1,
+                     ae_type = "- Related")
+
+```
+\newpage
+
+```{r}
+
+ae_table(rel = "Related", dose_freq = "ASN007 Once Weekly",
+                     data = ae_weekly_freq_dt2,
+                     ae_type = "- Related")
+
+```
+
+\newpage
+```{r}
+ae_table1(dose_freq = "ASN007 Daily and Weekly Combined\\\\ (by Grade – All Daily and Weekly Dose Levels)",                    data = ae_combo_freq_dt)
+
+```

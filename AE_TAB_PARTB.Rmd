@@ -1,0 +1,133 @@
+---
+output:  
+   pdf_document:
+     latex_engine: xelatex
+classoption: landscape
+
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "../R_Output")})
+
+header-includes:
+- \usepackage{array}
+- \usepackage{fancyhdr}
+- \usepackage{lastpage}
+- \usepackage{caption}
+- \pagestyle{fancy}
+- \usepackage{geometry}
+- \geometry{top = 1in, left = 1in, right = 1in, bottom = 1in}
+- \usepackage{longtable}
+- \usepackage{pgfplotstable}
+- \usepackage{booktabs}
+- \usepackage{multicol}
+- \usepackage{multirow}
+- \usepackage{siunitx}
+- \usepackage{makecell}
+- \setlength{\headheight}{32pt}
+- \sisetup{ 
+    round-mode = places,  round-precision = 2
+   }
+params:
+  title: ""
+
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, results = "asis")
+
+```
+
+\renewcommand{\arraystretch}{1.15}
+\centering
+
+```{r, results = "asis"}
+
+latex_setup()
+
+ae_dt <- data.table(read_sas("../adam/adae.sas7bdat"))
+
+ae_dt <- ae_dt[SAFFL=="Y" & TRTEMFL == "Y" & ANL02FL == "Y"]
+
+aevar <- c("SUBJID", "TRTA", "AEDECOD", "AEBODSYS", "COMPLAFL",
+           "AESEV", "AESEVN", "AESER", "AESTDY", "AEENDY", "AEDUR")
+
+setorder(ae_dt, SUBJID, TRTA, AEBODSYS, AEDECOD, AESEVN)
+ae_dt <- ae_dt[, .SD[.N], .(SUBJID, TRTA, AEBODSYS, AEDECOD)]
+
+ae_dt <- unique(ae_dt[, aevar, with=F])
+
+syslvl <- setorder(ae_dt[!is.na(AEBODSYS), .N, AEBODSYS], -N)$AEBODSYS
+ptlvl <- setorder(ae_dt[!is.na(AEDECOD), .N, .(AEBODSYS, AEDECOD)], AEBODSYS, -N, AEDECOD)$AEDECOD
+
+sl_dt <- data.table(read_sas("../adam/adsl.sas7bdat"))
+
+slvar <- c("SUBJID", "ARM", "SAFFL", "MITTFL", "PPAFL")
+sl_dt <- unique(sl_dt[SAFFL == "Y" & COMPLAFL == "Y", slvar, with=F])
+
+ae_dt <- merge(sl_dt, ae_dt, all.x = TRUE)
+
+pt_freq_dt <- ae_dt[, .(n = length(unique(SUBJID))), .(TRTA, AEBODSYS,  AEDECOD)]
+bodsys_freq_dt <- ae_dt[, .(n = length(unique(SUBJID))), .(TRTA, AEBODSYS)]
+bodsys_freq_dt[, AEDECOD := " All"]
+
+teae_freq_dt <- ae_dt[, .(n = length(unique(SUBJID))), .(TRTA)]
+teae_freq_dt[, `:=`(AEDECOD = " ", AEBODSYS = "Subjects with at least 1 TEAE")]
+
+ae_freq_dt <- rbind(bodsys_freq_dt, pt_freq_dt, teae_freq_dt)
+
+ae_freq_dt[, AEDECOD := factor(AEDECOD, levels = c(" ", " All", ptlvl))]
+ae_freq_dt[, AEBODSYS := factor(AEBODSYS, 
+                               levels = c("Subjects with at least 1 TEAE", syslvl))]
+
+trt_freq_dt <- sl_dt[, .(N = .N), .(ARM)]
+setnames(trt_freq_dt, "ARM", "TRTA")
+
+ae_freq_dt <- merge(ae_freq_dt, trt_freq_dt, by="TRTA")[, 
+                            `:=`(pct = round(n/N*100,1))]
+ae_freq_dt[, `:=`(TRTLBL = paste0(" (N = ", N,")"),
+                  RES = paste0(n, " (", sprintf("%5.1f", pct), ")"))]
+
+ppct <- function(x){
+  paste0(" (", sprintf("%.1f", x), ")")
+} 
+
+
+# ttl <- "Number and Percent of Patients with Adverse Event\\\\by Body System and Preferred Term\\\\
+# (10\\% or more)"
+# ae_freq_dt[, mx:=max(pct), .(AEBODSYS, AEDECOD)]
+# 
+# tabular(Multicolumn(AEBODSYS, "SOC  ", width = 6, texify = T)*
+#           Factor(AEDECOD, "Preferred Term") ~
+#            Factor(TRTA, "Treatment")*
+#            Heading()*Factor(TRTLBL)*
+#                 (Heading("n")*n*Heading()*identity*Justify("r") +
+#                       Heading("(\\%)")*ppct*Heading()*pct*Justify("r"))*
+#                  DropEmpty(), data=ae_freq_dt[mx>=10]) %>%
+# table_title(ttl)
+# 
+# ttl <- "Number and Percent of Patients with Adverse Event\\\\by Body System and Preferred Term\\\\
+# (5\\% or more)"
+# ae_freq_dt[, mx:=max(pct), .(AEBODSYS, AEDECOD)]
+# 
+# tabular(Multicolumn(AEBODSYS, "SOC  ", width = 6, texify = T)*
+#           Factor(AEDECOD, "Preferred Term") ~
+#            Factor(TRTA, "Treatment")*
+#            Heading()*Factor(TRTLBL)*
+#                 (Heading("n")*n*Heading()*identity*Justify("r") +
+#                       Heading("(\\%)")*ppct*Heading()*pct*Justify("r"))*
+#                  DropEmpty(), data=ae_freq_dt[mx>=5]) %>%
+# table_title(ttl)
+
+ttl <- "Number and Percent of Patients with Adverse Event\\\\by Body System and Preferred Term - Part B"
+ae_freq_dt[, mx:=max(pct), .(AEBODSYS, AEDECOD)]
+
+tabular(Multicolumn(AEBODSYS, "SOC  ", width = 6, texify = T)*
+          Factor(AEDECOD, "Preferred Term") ~
+           Factor(TRTA, "Treatment")*
+           Heading()*Factor(TRTLBL)*
+                (Heading("n")*n*Heading()*identity*Justify("r") +
+                      Heading("(\\%)")*ppct*Heading()*pct*Justify("r"))*
+                 DropEmpty(empty= 0), data=ae_freq_dt) %>%
+table_title(ttl)
+
+```

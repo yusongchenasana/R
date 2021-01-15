@@ -1,0 +1,72 @@
+---
+output:  
+   pdf_document:
+     latex_engine: xelatex
+classoption: landscape
+
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "../R_Output")})
+
+header-includes:
+- \usepackage{array}
+- \usepackage{fancyhdr}
+- \usepackage{lastpage}
+- \usepackage{caption}
+- \pagestyle{fancy}
+- \usepackage{geometry}
+- \geometry{top = 1in, left = 1in, right = 1in, bottom = 1in}
+- \usepackage{longtable}
+- \usepackage{pgfplotstable}
+- \usepackage{booktabs}
+- \usepackage{multicol}
+- \usepackage{multirow}
+- \usepackage{siunitx}
+- \usepackage{makecell}
+- \setlength{\headheight}{32pt}
+- \sisetup{ 
+    round-mode = places,  round-precision = 2
+   }
+params:
+  title: ""
+---
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F, warning = F, message = F)
+
+```
+
+```{r, results = "asis"}
+latex_setup()
+
+
+library(arsenal)
+
+
+locf <- function(x){
+  v <- trimws(x) %in% c("N", "Y")
+  c("N", x[v])[cumsum(v) + 1]
+}
+
+# adqs <- data.table(read_sas("../adam/adqs.sas7bdat"))
+adsl <- data.table(read_sas("../adam/adsl.sas7bdat"))
+
+vars <- c("AGEGR1", "SEX", "RACE", "AETHNIC", "PGABL")
+
+adsl <- adsl[SAFFL == "Y"][, (vars):=lapply(.SD, as.factor),
+                           .SDcols=vars]
+
+attr(adsl$AGEGR1, "label") <- "Age Group , n (%)"
+attr(adsl$SEX, "label") <- "Sex, n (%)"
+attr(adsl$RACE, "label") <- "Race, n (%)"
+attr(adsl$AETHNIC, "label") <- "Ethnic, n (%)"
+attr(adsl$PGABL, "label") <- "Baseline PGA, n (%)"
+attr(adsl$AGE, "label") <- "Age (yr)"
+
+tab1 <- tableby(ARM ~ AGE + AGEGR1 + SEX + RACE +
+           AETHNIC + HEIGHTBL + WEIGHTBL + BMIBL + PGABL, data=adsl)
+
+summary(tab1, title = "Demographic and Baseline (Safty Population)", pfootnote = F)
+
+```

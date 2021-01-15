@@ -1,0 +1,97 @@
+---
+output:  
+   pdf_document:
+     latex_engine: xelatex
+classoption: landscape
+
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "../R_Output")})
+
+header-includes:
+- \usepackage{array}
+- \usepackage{fancyhdr}
+- \usepackage{lastpage}
+- \usepackage{caption}
+- \pagestyle{fancy}
+- \usepackage{geometry}
+- \geometry{top = 1in, left = 1in, right = 1in, bottom = 1in}
+- \usepackage{longtable}
+- \usepackage{pgfplotstable}
+- \usepackage{booktabs}
+- \usepackage{multicol}
+- \usepackage{multirow}
+- \usepackage{siunitx}
+- \usepackage{makecell}
+- \setlength{\headheight}{32pt}
+- \sisetup{ 
+    round-mode = places,  round-precision = 2
+   }
+params:
+  title: ""
+
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, results = "asis")
+
+```
+
+\renewcommand{\arraystretch}{1.15}
+\centering
+
+```{r, results = "asis"}
+
+latex_setup()
+
+ae_dt <- data.table(read_sas("../adam/adae.sas7bdat"))
+ae_dt <- ae_dt[SAFFL=="Y" & TRTEMFL == "Y"]
+ae_dt[, c("COMP", "DOSE", "UNIT", "FREQ") := as.list(strsplit(TRTA, split=" ")[[1]]), by=1:NROW(ae_dt) ]
+ae_dt[, AEREL := ifelse(AEREL == "NOT RELATED", "N", "Y")]
+
+ae_rel <- ae_dt[AEREL == "Y", .(n = length(unique(SUBJID)), TYPE = "TRAE"), .(FREQ, DOSE)]
+ae_any <- ae_dt[, .(n = length(unique(SUBJID)), TYPE = "TEAE"), .(FREQ, DOSE)]
+ae_ser <- ae_dt[AETOXGR >= 3, .(n = length(unique(SUBJID)), TYPE = "SAE"), .(FREQ, DOSE)]
+ae_dlt <- ae_dt[AEDLT == "Y", .(n = length(unique(SUBJID)), TYPE = "DLT"), .(FREQ, DOSE)]
+ae_dth <- ae_dt[AEOUT == "FATAL", .(n = length(unique(SUBJID)), TYPE = "Death"), .(FREQ, DOSE)]
+ae_dis <- ae_dt[AEACN == "DRUG WITHDRAWN", .(n = length(unique(SUBJID)), TYPE = "Withdrawal"), .(FREQ, DOSE)]
+ae_mod <- ae_dt[AEACN %in% c("DRUG INTERRUPTED", "DOSE REDUCED"), .(n = length(unique(SUBJID)), TYPE = "Drug Mod"), .(FREQ, DOSE)]
+
+ae_sum <- rbind(ae_rel, ae_any, ae_ser, ae_dlt, ae_dth, ae_dis, ae_mod)
+
+
+sl_dt <- data.table(read_sas("../adam/adsl.sas7bdat"))[SAFFL == "Y"]
+sl_dt[, c("COMP", "DOSE", "UNIT", "FREQ") := as.list(strsplit(ARM, split=" ")[[1]]), by=1:NROW(sl_dt) ]
+pop_n <- sl_dt[, .(N=.N), .(FREQ, DOSE)]
+
+ae_sum <- merge(ae_sum, pop_n)
+ae_sum[, NPCT:=paste0("(", sprintf("%5.1f", 100*n/N), "\\%)")]
+
+ae_sum1 <- ae_sum[FREQ == "QD"][, `:=`(DOSE = factor(paste0(DOSE, " mg"),
+                           levels = paste0(c(10,20,40, 60, 80), " mg")),
+              POPLBL = paste0("(N = ", N, ")"))]
+
+
+ae_sum2 <- ae_sum[FREQ == "QW"][, `:=`(DOSE = factor(paste0(DOSE, " mg"),
+                           levels = paste0(c(80, 120, 180, 250, 350), " mg")),
+              POPLBL = paste0("(N = ", N, ")"))]
+
+tabular(Factor(TYPE, "Category") ~
+          Heading()*Factor(FREQ)*
+          Heading()*DOSE*
+          Heading()*Factor(POPLBL)*Heading()*identity*
+             Justify(r)*(n + Heading("(\\%)")*NPCT)*DropEmpty(empty=0)
+        , ae_sum1) %>%
+  table_title("Overview of Adverse Events")
+
+
+tabular(Factor(TYPE, "Category") ~
+          Heading()*Factor(FREQ)*
+          Heading()*DOSE*
+          Heading()*Factor(POPLBL)*Heading()*identity*
+             Justify(r)*(n + Heading("(\\%)")*NPCT)*DropEmpty(empty=0)
+        , ae_sum2) %>%
+  table_title("Overview of Adverse Events")
+
+
+```
